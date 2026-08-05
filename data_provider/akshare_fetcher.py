@@ -1365,6 +1365,42 @@ class AkshareFetcher(BaseFetcher):
             logger.error(f"[Akshare] 获取指数行情失败: {e}")
             return None
 
+    def get_all_a_share_snapshot(self) -> Optional[pd.DataFrame]:
+        """
+        获取全 A 股实时行情快照(东方财富)。
+
+        与 _get_stock_realtime_quote_em 共用同一个模块级缓存与熔断器:
+        若当日个股分析已触发过全量拉取,这里直接命中缓存;否则触发一次刷新。
+
+        Returns:
+            全 A 股快照 DataFrame(含 代码/名称/最新价/涨跌幅/换手率/量比/总市值 等列),
+            失败或空返回 None。
+        """
+        import akshare as ak
+        circuit_breaker = get_realtime_circuit_breaker()
+        source_key = "akshare_em"
+        try:
+            current_time = time.time()
+            cached = _realtime_cache['data']
+            if (cached is not None and not cached.empty and
+                    current_time - _realtime_cache['timestamp'] < _realtime_cache['ttl']):
+                logger.debug(f"[选股快照] 命中缓存,年龄 {int(current_time - _realtime_cache['timestamp'])}s")
+                return cached
+
+            self._set_random_user_agent()
+            self._enforce_rate_limit()
+            logger.info("[API调用] ak.stock_zh_a_spot_em() 获取全A股快照(选股)...")
+            df = ak.stock_zh_a_spot_em()
+            circuit_breaker.record_success(source_key)
+            _realtime_cache['data'] = df
+            _realtime_cache['timestamp'] = current_time
+            logger.info(f"[API返回] 选股快照成功: {len(df) if df is not None else 0} 只,缓存已更新")
+            return df if df is not None and not df.empty else None
+        except Exception as e:
+            logger.error(f"[API错误] 获取全A股快照失败: {e}")
+            circuit_breaker.record_failure(source_key, str(e))
+            return None
+
     def get_market_stats(self) -> Optional[Dict[str, Any]]:
         """
         获取市场涨跌统计 (东财接口)
