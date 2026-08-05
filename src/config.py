@@ -132,7 +132,22 @@ class Config:
     debug: bool = False
     http_proxy: Optional[str] = None  # HTTP 代理 (例如: http://127.0.0.1:10809)
     https_proxy: Optional[str] = None # HTTPS 代理
-    
+
+    # === 选股配置 ===
+    selection_enabled: bool = False            # 是否启用每日选股报告
+    selection_top_n: int = 7                    # 选股报告取 Top N
+    # 粗筛阈值
+    selection_price_min: float = 3.0            # 现价下限（元）
+    selection_price_max: float = 50.0           # 现价上限（元）
+    selection_turnover_min: float = 1.0         # 换手率下限（%）
+    selection_turnover_max: float = 15.0        # 换手率上限（%）
+    selection_volume_ratio_min: float = 1.0     # 量比下限
+    selection_volume_ratio_max: float = 8.0     # 量比上限
+    selection_mv_min: float = 50e8              # 总市值下限（元）
+    selection_mv_max: float = 2000e8            # 总市值上限（元）
+    selection_change_pct_min: float = -5.0      # 涨跌幅下限（%）
+    selection_change_pct_max: float = 8.0       # 涨跌幅上限（%）
+
     # === 定时任务配置 ===
     schedule_enabled: bool = False            # 是否启用定时任务
     schedule_time: str = "18:00"              # 每日推送时间（HH:MM 格式）
@@ -398,7 +413,20 @@ class Config:
             # - tushare: Tushare Pro，需要2000积分，数据全面
             realtime_source_priority=os.getenv('REALTIME_SOURCE_PRIORITY', 'tencent,akshare_sina,efinance,akshare_em'),
             realtime_cache_ttl=int(os.getenv('REALTIME_CACHE_TTL', '600')),
-            circuit_breaker_cooldown=int(os.getenv('CIRCUIT_BREAKER_COOLDOWN', '300'))
+            circuit_breaker_cooldown=int(os.getenv('CIRCUIT_BREAKER_COOLDOWN', '300')),
+            # 选股配置
+            selection_enabled=os.getenv('SELECTION_ENABLED', 'false').lower() == 'true',
+            selection_top_n=int(os.getenv('SELECTION_TOP_N', '7')),
+            selection_price_min=float(os.getenv('SELECTION_PRICE_MIN', '3')),
+            selection_price_max=float(os.getenv('SELECTION_PRICE_MAX', '50')),
+            selection_turnover_min=float(os.getenv('SELECTION_TURNOVER_MIN', '1')),
+            selection_turnover_max=float(os.getenv('SELECTION_TURNOVER_MAX', '15')),
+            selection_volume_ratio_min=float(os.getenv('SELECTION_VOLUME_RATIO_MIN', '1')),
+            selection_volume_ratio_max=float(os.getenv('SELECTION_VOLUME_RATIO_MAX', '8')),
+            selection_mv_min=float(os.getenv('SELECTION_MV_MIN', '5000000000')),
+            selection_mv_max=float(os.getenv('SELECTION_MV_MAX', '200000000000')),
+            selection_change_pct_min=float(os.getenv('SELECTION_CHANGE_PCT_MIN', '-5')),
+            selection_change_pct_max=float(os.getenv('SELECTION_CHANGE_PCT_MAX', '8')),
         )
     
     @classmethod
