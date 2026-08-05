@@ -13,6 +13,7 @@ A股趋势突破选股模块
 
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import List, Dict, Optional
 
 import pandas as pd
@@ -259,3 +260,34 @@ def run_selection(fetcher_manager, params: Optional[SelectionParams] = None) -> 
 
     logger.info(f"[选股] 精筛完成: {len(results)} 只达标,取 Top {len(top)}")
     return SelectionOutcome(scanned=len(snapshot), qualified=len(results), results=top)
+
+
+def _describe_bias(bias: float) -> str:
+    return '回踩MA5最佳买点' if bias < 2.0 else '偏离略大,等回踩'
+
+
+def _describe_volume(volume_ratio: float) -> str:
+    if volume_ratio < 1.2:
+        return '量能平稳'
+    if volume_ratio < 2.0:
+        return '温和放量'
+    return '明显放量'
+
+
+def format_selection_report(outcome: SelectionOutcome, date_str: Optional[str] = None,
+                            schedule_time: str = "18:00") -> str:
+    """生成选股报告 markdown。"""
+    date_str = date_str or datetime.now().strftime('%Y-%m-%d')
+    lines = [f"🎯 {date_str} 今日选股 · A股趋势突破"]
+    lines.append(f"从 {outcome.scanned} 只中筛出达标 {outcome.qualified} 只,取 Top {len(outcome.results)}")
+    lines.append("候选池: 沪深主板 | 排除ST/新股/涨停")
+    lines.append("")
+    for r in outcome.results:
+        icon = "🔥" if r.trend_level == '强势多头' else "✅"
+        lines.append(f"{icon} {r.trend_level} | {r.name}({r.code})")
+        lines.append(f"📍 现价 {r.price:.2f} | 多头排列 MA5>MA10>MA20")
+        lines.append(f"📈 乖离率 {r.bias_ma5:.1f}% | {_describe_bias(r.bias_ma5)}")
+        lines.append(f"⚡ 量比 {r.volume_ratio:.1f} | {_describe_volume(r.volume_ratio)}")
+        lines.append("")
+    lines.append(f"---\n生成时间: {schedule_time} | 仅供学习参考,不构成投资建议")
+    return "\n".join(lines)

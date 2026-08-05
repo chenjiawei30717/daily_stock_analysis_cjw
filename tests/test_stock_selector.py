@@ -10,6 +10,8 @@ from src.stock_selector import (
     evaluate_trend,
     run_selection,
     SelectionResult,
+    SelectionOutcome,
+    format_selection_report,
 )
 
 
@@ -150,3 +152,32 @@ def test_run_selection_snapshot_failure_returns_none(mocker):
     import src.stock_selector as ss
     mocker.patch.object(ss.AkshareFetcher, 'get_all_a_share_snapshot', return_value=None)
     assert run_selection(mocker.Mock()) is None
+
+
+# ---------- 报告格式化 ----------
+
+def test_format_selection_report():
+    outcome = SelectionOutcome(
+        scanned=5123, qualified=18,
+        results=[
+            SelectionResult(code='002165', name='红宝丽', price=18.52,
+                            trend_level='强势多头', bias_ma5=1.2, volume_ratio=1.8, score=6),
+            SelectionResult(code='002064', name='华峰化学', price=7.85,
+                            trend_level='多头排列', bias_ma5=3.5, volume_ratio=1.4, score=4),
+        ],
+    )
+    s = format_selection_report(outcome, date_str='2026-08-05', schedule_time='18:00')
+    assert '2026-08-05' in s
+    assert '从 5123 只中筛出达标 18 只,取 Top 2' in s
+    assert '🔥 强势多头 | 红宝丽(002165)' in s
+    assert '✅ 多头排列 | 华峰化学(002064)' in s
+    assert '乖离率 1.2% | 回踩MA5最佳买点' in s
+    assert '量比 1.4 | 温和放量' in s
+    assert '生成时间: 18:00 | 仅供学习参考,不构成投资建议' in s
+
+
+def test_format_selection_report_empty():
+    s = format_selection_report(SelectionOutcome(scanned=0, qualified=0),
+                                date_str='2026-08-05', schedule_time='18:00')
+    assert '取 Top 0' in s
+    assert '🔥' not in s
