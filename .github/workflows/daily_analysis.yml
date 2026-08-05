@@ -133,6 +133,8 @@ jobs:
           SINGLE_STOCK_NOTIFY: ${{ vars.SINGLE_STOCK_NOTIFY || secrets.SINGLE_STOCK_NOTIFY || 'false' }}
           MARKET_REVIEW_ENABLED: ${{ vars.MARKET_REVIEW_ENABLED || secrets.MARKET_REVIEW_ENABLED || 'true' }}
           ANALYSIS_DELAY: ${{ vars.ANALYSIS_DELAY || secrets.ANALYSIS_DELAY || '0' }}
+          SELECTION_ENABLED: ${{ vars.SELECTION_ENABLED || secrets.SELECTION_ENABLED || 'false' }}
+          SELECTION_TOP_N: ${{ vars.SELECTION_TOP_N || secrets.SELECTION_TOP_N || '7' }}
           
           # ==========================================
           # 系统配置
