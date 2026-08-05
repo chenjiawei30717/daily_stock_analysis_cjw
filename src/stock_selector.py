@@ -123,3 +123,65 @@ def coarse_filter(df: pd.DataFrame, params: SelectionParams) -> List[dict]:
             'total_mv': total_mv,
         })
     return out
+
+
+# 精筛硬性门
+_MIN_HIST_ROWS = 60       # 排除新股
+_BIAS_LIMIT = 5.0         # 乖离率上限(%)
+_MIN_VOL_RATIO = 1.1      # 量能配合下限
+_MA20_LOOKBACK = 6        # 对比 ma20.iloc[-1] 与 ma20.iloc[-6]
+
+
+def evaluate_trend(df: pd.DataFrame) -> Optional[dict]:
+    """
+    精筛:对单只幸存者历史数据做趋势判定与打分。
+
+    门槛(任一不达返回 None):
+    - 历史行数 >= 60(排除新股)
+    - MA5 > MA10 > MA20(多头排列)
+    - 乖离率(close-ma5)/ma5*100 在 0% ~ 5%
+    - 当日 volume_ratio >= 1.1(量能配合)
+    - MA20 近 5 日抬升(ma20[-1] > ma20[-6])
+    """
+    if df is None or len(df) < _MIN_HIST_ROWS:
+        return None
+    for col in ('close', 'ma5', 'ma10', 'ma20', 'volume_ratio'):
+        if col not in df.columns:
+            return None
+
+    last = df.iloc[-1]
+    ma5, ma10, ma20 = last['ma5'], last['ma10'], last['ma20']
+    if not (ma5 > ma10 > ma20):
+        return None
+
+    # MA20 近5日抬升
+    if len(df) < _MA20_LOOKBACK or not (df['ma20'].iloc[-1] > df['ma20'].iloc[-_MA20_LOOKBACK]):
+        return None
+
+    close = float(last['close'])
+    if ma5 <= 0:
+        return None
+    bias_ma5 = (close - float(ma5)) / float(ma5) * 100.0
+    if not (0.0 <= bias_ma5 <= _BIAS_LIMIT):
+        return None
+
+    volume_ratio = float(last['volume_ratio'])
+    if volume_ratio < _MIN_VOL_RATIO:
+        return None
+
+    # 趋势强度:间距较前一日扩大 -> 强势多头
+    prev_spread = float(df['ma5'].iloc[-2] - df['ma20'].iloc[-2])
+    cur_spread = float(ma5 - ma20)
+    trend_level = '强势多头' if cur_spread > prev_spread else '多头排列'
+
+    score = 0
+    score += 3 if trend_level == '强势多头' else 2
+    score += 2 if bias_ma5 < 2.0 else 1
+    score += 2 if volume_ratio >= 2.0 else 1
+
+    return {
+        'trend_level': trend_level,
+        'bias_ma5': bias_ma5,
+        'volume_ratio': volume_ratio,
+        'score': score,
+    }

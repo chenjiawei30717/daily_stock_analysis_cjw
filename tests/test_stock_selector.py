@@ -2,7 +2,27 @@
 """选股模块单元测试。纯函数测试不联网,编排测试用 mock。"""
 
 import pandas as pd
-from src.stock_selector import SelectionParams, is_main_board_code, coarse_filter
+import numpy as np
+from src.stock_selector import (
+    SelectionParams,
+    is_main_board_code,
+    coarse_filter,
+    evaluate_trend,
+)
+
+
+def _make_hist(n=70, rising=True):
+    """构造 n 行历史,close 单调升/降,含 ma5/ma10/ma20/volume_ratio 列。"""
+    if rising:
+        close = np.arange(10.0, 10.0 + n, 1.0)
+    else:
+        close = np.arange(10.0 + n, 10.0, -1.0)
+    df = pd.DataFrame({'close': close})
+    df['ma5'] = df['close'].rolling(5).mean()
+    df['ma10'] = df['close'].rolling(10).mean()
+    df['ma20'] = df['close'].rolling(20).mean()
+    df['volume_ratio'] = 1.5
+    return df
 
 
 def _snapshot_rows():
@@ -61,3 +81,38 @@ def test_coarse_filter_empty_pool():
 def test_coarse_filter_missing_columns():
     df = pd.DataFrame({'代码': ['600519']})
     assert coarse_filter(df, SelectionParams()) == []
+
+
+# ---------- 精筛 ----------
+
+def test_evaluate_trend_passes_bull():
+    r = evaluate_trend(_make_hist())
+    assert r is not None
+    assert r['trend_level'] in ('强势多头', '多头排列')
+    assert r['bias_ma5'] >= 0
+    assert r['score'] >= 4
+
+
+def test_evaluate_trend_score_upper_bound():
+    r = evaluate_trend(_make_hist(70))
+    assert r['score'] <= 7
+
+
+def test_evaluate_trend_rejects_bear():
+    assert evaluate_trend(_make_hist(70, rising=False)) is None
+
+
+def test_evaluate_trend_rejects_new_stock():
+    assert evaluate_trend(_make_hist(30)) is None
+
+
+def test_evaluate_trend_rejects_high_bias():
+    df = _make_hist()
+    df.loc[df.index[-1], 'close'] = df['ma5'].iloc[-1] * 1.10
+    assert evaluate_trend(df) is None
+
+
+def test_evaluate_trend_rejects_shrinking_volume():
+    df = _make_hist()
+    df['volume_ratio'] = 0.6
+    assert evaluate_trend(df) is None
