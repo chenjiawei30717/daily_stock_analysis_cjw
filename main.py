@@ -257,7 +257,34 @@ def run_full_analysis(
             # 如果有结果，赋值给 market_report 用于后续飞书文档生成
             if review_result:
                 market_report = review_result
-        
+
+        # 3. 选股模块（可选）：大盘复盘之后运行，产出独立选股报告，不并入个股分析
+        if getattr(config, 'selection_enabled', False):
+            from src.stock_selector import run_selection, format_selection_report
+            try:
+                logger.info("===== 开始每日选股 =====")
+                outcome = run_selection(pipeline.fetcher_manager)
+                if outcome is None:
+                    logger.error("选股失败：全A股快照获取失败，已跳过本次选股")
+                elif outcome.results:
+                    date_str = datetime.now().strftime('%Y-%m-%d')
+                    report = format_selection_report(
+                        outcome, date_str=date_str, schedule_time=config.schedule_time
+                    )
+                    filepath = pipeline.notifier.save_report_to_file(
+                        report, f"selection_{datetime.now().strftime('%Y%m%d')}.md"
+                    )
+                    logger.info(f"选股报告已保存: {filepath}")
+                    if not args.no_notify and pipeline.notifier.is_available():
+                        if pipeline.notifier.send(report):
+                            logger.info("选股报告推送成功")
+                        else:
+                            logger.warning("选股报告推送失败")
+                else:
+                    logger.info("选股：今日无达标股票，不推送")
+            except Exception as e:
+                logger.exception(f"选股模块异常（不影响当天其余任务）: {e}")
+
         # 输出摘要
         if results:
             logger.info("\n===== 分析结果摘要 =====")
