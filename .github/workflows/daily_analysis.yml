@@ -26,6 +26,8 @@ concurrency:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 允许推送 docs/ 报告回仓库,触发 Pages 重建
     # 添加超时限制，防止任务卡死
     timeout-minutes: 30
     
@@ -189,7 +191,24 @@ jobs:
           else
             python main.py
           fi
-      
+
+      - name: 生成并发布报告站点
+        if: always()
+        run: |
+          set -e
+          D=$(date +%Y%m%d)          # 20260805,对应报告文件名
+          TD=$(date +%F)             # 2026-08-05,对应归档目录
+          mkdir -p "docs/archive/$TD"
+          cp -f "reports/selection_${D}.md"     "docs/archive/$TD/selection.md" 2>/dev/null || true
+          cp -f "reports/market_review_${D}.md" "docs/archive/$TD/market_review.md" 2>/dev/null || true
+          cp -f "reports/report_${D}.md"        "docs/archive/$TD/dashboard.md" 2>/dev/null || true
+          python scripts/build_site_index.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          git diff --cached --quiet || git commit -m "docs: 更新报告站点 $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push origin main
+
       - name: 上传分析报告
         uses: actions/upload-artifact@v4
         if: always()

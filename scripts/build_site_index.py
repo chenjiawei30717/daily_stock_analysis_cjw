@@ -28,6 +28,8 @@ def _is_date_dir(name: str) -> bool:
 
 def find_report_dates(archive_dir: Path) -> List[dict]:
     """扫描 archive 下日期目录,返回倒序 [{date, selection, market_review, dashboard}]。"""
+    if not archive_dir.exists():
+        return []
     entries = []
     for child in sorted(archive_dir.iterdir(), reverse=True):
         if not child.is_dir() or not _is_date_dir(child.name):
