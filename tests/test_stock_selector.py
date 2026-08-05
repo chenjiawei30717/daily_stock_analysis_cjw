@@ -8,6 +8,8 @@ from src.stock_selector import (
     is_main_board_code,
     coarse_filter,
     evaluate_trend,
+    run_selection,
+    SelectionResult,
 )
 
 
@@ -116,3 +118,35 @@ def test_evaluate_trend_rejects_shrinking_volume():
     df = _make_hist()
     df['volume_ratio'] = 0.6
     assert evaluate_trend(df) is None
+
+
+# ---------- 编排 ----------
+
+def test_run_selection_end_to_end(mocker):
+    df_snapshot = pd.DataFrame([
+        {'代码': '600519', '名称': '贵州茅台', '最新价': 45.0, '涨跌幅': 1.2, '换手率': 3.0, '量比': 1.5, '总市值': 2000e8},
+        {'代码': '002415', '名称': '海康威视', '最新价': 30.0, '涨跌幅': 0.5, '换手率': 2.0, '量比': 1.1, '总市值': 1000e8},
+    ])
+    fetcher_mock = mocker.Mock()
+    hist_bull = _make_hist(70)
+    hist_bear = _make_hist(70, rising=False)
+
+    def fake_get_daily_data(code, days=30):
+        return (hist_bull if code == '600519' else hist_bear), 'AkshareFetcher'
+    fetcher_mock.get_daily_data.side_effect = fake_get_daily_data
+
+    import src.stock_selector as ss
+    mocker.patch.object(ss.AkshareFetcher, 'get_all_a_share_snapshot', return_value=df_snapshot)
+
+    outcome = run_selection(fetcher_mock, params=SelectionParams())
+    assert outcome is not None
+    assert outcome.scanned == 2
+    assert [r.code for r in outcome.results] == ['600519']
+    assert outcome.qualified == 1
+    assert isinstance(outcome.results[0], SelectionResult)
+
+
+def test_run_selection_snapshot_failure_returns_none(mocker):
+    import src.stock_selector as ss
+    mocker.patch.object(ss.AkshareFetcher, 'get_all_a_share_snapshot', return_value=None)
+    assert run_selection(mocker.Mock()) is None

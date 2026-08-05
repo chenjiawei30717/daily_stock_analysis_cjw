@@ -13,10 +13,11 @@ A股趋势突破选股模块
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import List, Dict, Optional
 
 import pandas as pd
+
+from data_provider.akshare_fetcher import AkshareFetcher
 
 logger = logging.getLogger(__name__)
 
@@ -185,3 +186,76 @@ def evaluate_trend(df: pd.DataFrame) -> Optional[dict]:
         'volume_ratio': volume_ratio,
         'score': score,
     }
+
+
+@dataclass
+class SelectionResult:
+    """单只达标股票的选股结果。"""
+    code: str
+    name: str
+    price: float
+    trend_level: str
+    bias_ma5: float
+    volume_ratio: float
+    score: int
+
+
+@dataclass
+class SelectionOutcome:
+    """一次选股编排的汇总结果。"""
+    scanned: int = 0
+    qualified: int = 0
+    results: List[SelectionResult] = field(default_factory=list)
+
+
+def run_selection(fetcher_manager, params: Optional[SelectionParams] = None) -> Optional[SelectionOutcome]:
+    """
+    执行两级漏斗选股。
+
+    1. 粗筛:全 A 股快照 -> 候选池(~150)
+    2. 精筛:逐只拉历史 K 线评估趋势,打分
+    3. 排序取 Top N
+
+    Args:
+        fetcher_manager: 具备 get_daily_data() 的数据源管理器(DataFetcherManager)
+        params: 选股参数,缺省用 Config
+
+    Returns:
+        SelectionOutcome;快照获取失败返回 None。
+    """
+    from src.config import get_config
+
+    p = params or SelectionParams.from_config(get_config())
+
+    snapshot = AkshareFetcher().get_all_a_share_snapshot()
+    if snapshot is None:
+        logger.error("[选股] 全A股快照获取失败,本次选股中止")
+        return None
+
+    candidates = coarse_filter(snapshot, p)
+    logger.info(f"[选股] 粗筛完成: {len(snapshot)} 只快照 -> {len(candidates)} 只候选,开始精筛")
+
+    results: List[SelectionResult] = []
+    for cand in candidates:
+        try:
+            df_hist, _ = fetcher_manager.get_daily_data(cand['code'], days=90)
+            ev = evaluate_trend(df_hist)
+            if ev:
+                results.append(SelectionResult(
+                    code=cand['code'],
+                    name=cand['name'],
+                    price=float(cand['price']),
+                    trend_level=ev['trend_level'],
+                    bias_ma5=ev['bias_ma5'],
+                    volume_ratio=ev['volume_ratio'],
+                    score=ev['score'],
+                ))
+        except Exception as e:
+            logger.warning(f"[选股] {cand['code']} 精筛失败,跳过: {e}")
+            continue
+
+    results.sort(key=lambda r: r.score, reverse=True)
+    top = results[:p.top_n]
+
+    logger.info(f"[选股] 精筛完成: {len(results)} 只达标,取 Top {len(top)}")
+    return SelectionOutcome(scanned=len(snapshot), qualified=len(results), results=top)
