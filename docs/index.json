@@ -1,4 +1,11 @@
 {
-  "dates": [],
-  "latest": ""
+  "dates": [
+    {
+      "date": "2026-08-05",
+      "selection": false,
+      "market_review": true,
+      "dashboard": true
+    }
+  ],
+  "latest": "2026-08-05"
 }
