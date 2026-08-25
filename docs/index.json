@@ -1,6 +1,12 @@
 {
   "dates": [
     {
+      "date": "2026-08-25",
+      "selection": false,
+      "market_review": true,
+      "dashboard": true
+    },
+    {
       "date": "2026-08-24",
       "selection": false,
       "market_review": true,
@@ -85,5 +91,5 @@
       "dashboard": true
     }
   ],
-  "latest": "2026-08-24"
+  "latest": "2026-08-25"
 }
